@@ -5,8 +5,8 @@ use bardecoder::{
 };
 use base64::prelude::*;
 use base64::Engine;
-use image::{DynamicImage, GenericImageView, Luma};
-use qrcode::QrCode;
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
+use qrcode::{render::Pixel, EcLevel, QrCode};
 use rxing::{
     common::{AdaptiveThresholdBinarizer, CharacterSet, GlobalHistogramBinarizer, HybridBinarizer},
     helpers::detect_in_file,
@@ -22,6 +22,16 @@ use std::{
 };
 use threadpool::ThreadPool;
 use tracing::{debug, error, info, span, warn, Level};
+// pub mod ffmpeg;
+pub mod render;
+
+pub fn encode_with_qr(data: &str) -> Result<ImageBuffer<Luma<u8>, Vec<u8>>, Box<dyn Error>> {
+    // Encode some data into bits.
+    // let code = QrCode::new(data)?;
+    let code = QrCode::with_error_correction_level(data, EcLevel::L).unwrap();
+    // Render the bits into an image.
+    Ok(code.render::<Luma<u8>>().build())
+}
 
 pub fn encode(filename: &str) -> Result<(), Box<dyn Error>> {
     fs::remove_dir_all("out").ok(); // The .ok() ignores errors if the directory doesn't exist
@@ -48,12 +58,12 @@ pub fn encode(filename: &str) -> Result<(), Box<dyn Error>> {
             let encoded = String::from_utf8(chunk.clone()).unwrap();
             info!("writing file sum");
             fs::write(format!("sums/{i}.sum"), &encoded).unwrap();
-            // let encoded = cs.decode(&chunk)?;
             let writer = QRCodeWriter::default();
             let matrix = writer
-                .encode(&encoded, &BarcodeFormat::QR_CODE, 500, 500)
+                .encode(&encoded, &BarcodeFormat::QR_CODE, 200, 200)
                 .unwrap();
             let image: DynamicImage = matrix.into();
+            // let image = encode_with_qr(&encoded).unwrap();
             let p = format!("out/qrcode-{:04}.png", i);
             info!("writing: {p}");
             image.save(p).unwrap();
