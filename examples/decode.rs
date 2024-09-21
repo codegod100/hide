@@ -1,3 +1,5 @@
+use tracing_subscriber;
 fn main() {
-    hide::decode("frames", "out.mp4").unwrap();
+    tracing_subscriber::fmt::init();
+    hide::decode("frames", "compiled.mp4").unwrap();
 }

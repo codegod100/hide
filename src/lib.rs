@@ -32,8 +32,6 @@ pub fn encode(filename: &str) -> Result<(), Box<dyn Error>> {
     File::open(filename).unwrap().read_to_end(&mut buf)?;
     // Encode some data into bits.
     let based = BASE64_STANDARD.encode(buf);
-    info!("writing checksum");
-    fs::write("b64-first.txt", based.clone())?;
     let chunks: Vec<Vec<u8>> = based
         .as_bytes()
         .chunks(2900)
@@ -48,13 +46,15 @@ pub fn encode(filename: &str) -> Result<(), Box<dyn Error>> {
             // let cs = CharacterSet::get_character_set_by_name("Binary").unwrap();
             info!("encoding");
             let encoded = String::from_utf8(chunk.clone()).unwrap();
+            info!("writing file sum");
+            fs::write(format!("sums/{i}.sum"), &encoded).unwrap();
             // let encoded = cs.decode(&chunk)?;
             let writer = QRCodeWriter::default();
             let matrix = writer
                 .encode(&encoded, &BarcodeFormat::QR_CODE, 500, 500)
                 .unwrap();
             let image: DynamicImage = matrix.into();
-            let p = format!("out/qrcode-{}.png", i);
+            let p = format!("out/qrcode-{:04}.png", i);
             info!("writing: {p}");
             image.save(p).unwrap();
             // let tx = tx.clone();
@@ -89,10 +89,10 @@ pub fn decode(frames_path: &str, filename: &str) -> Result<(), Box<dyn Error>> {
             entry
                 .file_name()
                 .to_str()
-                .and_then(|s| s.strip_prefix("frame-"))
+                .and_then(|s| s.strip_prefix("qrcode-"))
                 .and_then(|s| s.strip_suffix(".png"))
                 .and_then(|s| s.parse::<u32>().ok())
-                .unwrap_or(0)
+                .unwrap()
         };
 
         let a_num = extract_number(a);
@@ -115,10 +115,13 @@ pub fn decode(frames_path: &str, filename: &str) -> Result<(), Box<dyn Error>> {
             let s = image_to_string(path.to_str().unwrap())?;
             info!("writing string");
             base.push_str(&s);
+            info!("checking sum");
+            let sum = fs::read_to_string(format!("sums/{i}.sum"))?;
+            if sum != s {
+                panic!("sums don't match for {i}:\n\n{}\n\n{}", sum, s)
+            }
         }
     }
-    info!("writing checksum");
-    fs::write("b64-second.txt", &base)?;
     // info!("base64 string: {}", String::from_utf8(bytes.clone())?);
     info!("decoding base64");
     let decoded = BASE64_STANDARD.decode(&base)?;
