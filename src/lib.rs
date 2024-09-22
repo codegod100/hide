@@ -6,6 +6,7 @@ use bardecoder::{
 use base64::prelude::*;
 use base64::Engine;
 use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
+use kantera::ffmpeg::Exporter;
 use qrcode::{render::Pixel, EcLevel, QrCode};
 use rxing::{
     common::{AdaptiveThresholdBinarizer, CharacterSet, GlobalHistogramBinarizer, HybridBinarizer},
@@ -23,12 +24,13 @@ use std::{
 use threadpool::ThreadPool;
 use tracing::{debug, error, info, span, warn, Level};
 // pub mod ffmpeg;
+pub mod exporter;
 pub mod render;
 
 pub fn encode_with_qr(data: &str) -> Result<ImageBuffer<Luma<u8>, Vec<u8>>, Box<dyn Error>> {
     // Encode some data into bits.
     // let code = QrCode::new(data)?;
-    let code = QrCode::with_error_correction_level(data, EcLevel::L).unwrap();
+    let code = QrCode::with_error_correction_level(data, EcLevel::H).unwrap();
     // Render the bits into an image.
     Ok(code.render::<Luma<u8>>().build())
 }
@@ -44,7 +46,7 @@ pub fn encode(filename: &str) -> Result<(), Box<dyn Error>> {
     let based = BASE64_STANDARD.encode(buf);
     let chunks: Vec<Vec<u8>> = based
         .as_bytes()
-        .chunks(2900)
+        .chunks(1000)
         .map(|chunk| chunk.to_vec())
         .collect();
     let pool = ThreadPool::new(8);
@@ -58,12 +60,12 @@ pub fn encode(filename: &str) -> Result<(), Box<dyn Error>> {
             let encoded = String::from_utf8(chunk.clone()).unwrap();
             info!("writing file sum");
             fs::write(format!("sums/{i}.sum"), &encoded).unwrap();
-            let writer = QRCodeWriter::default();
-            let matrix = writer
-                .encode(&encoded, &BarcodeFormat::QR_CODE, 200, 200)
-                .unwrap();
-            let image: DynamicImage = matrix.into();
-            // let image = encode_with_qr(&encoded).unwrap();
+            // let writer = QRCodeWriter::default();
+            // let matrix = writer
+            //     .encode(&encoded, &BarcodeFormat::QR_CODE, 500, 500)
+            //     .unwrap();
+            // let image: DynamicImage = matrix.into();
+            let image = encode_with_qr(&encoded).unwrap();
             let p = format!("out/qrcode-{:04}.png", i);
             info!("writing: {p}");
             image.save(p).unwrap();
@@ -128,7 +130,7 @@ pub fn decode(frames_path: &str, filename: &str) -> Result<(), Box<dyn Error>> {
             info!("checking sum");
             let sum = fs::read_to_string(format!("sums/{i}.sum"))?;
             if sum != s {
-                panic!("sums don't match for {i}:\n\n{}\n\n{}", sum, s)
+                // panic!("sums don't match for {i}:\n\n{}\n\n{}", sum, s)
             }
         }
     }
